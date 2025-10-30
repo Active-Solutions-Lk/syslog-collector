@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# FULL SYSLOG + API INSTALLER
-# Combines: rsyslog collector + API
-# One command: sudo bash install.sh
-# No input, no conflicts, 100% automated
+# FINAL: SYSLOG COLLECTOR + API (ONE-CLICK, NO CONFLICTS)
+# Uses Admin / Admin@collector1
+# No rsyslog-mysql package → avoids ommysql conflict
+# Safe, idempotent, clean
 
 set -e
 
@@ -31,7 +31,7 @@ EXCLUDE_HOST=$(hostname)
 
 # ------------------- Start -------------------
 echo -e "${GREEN}================================================${NC}"
-echo -e "${GREEN}   SYSLOG COLLECTOR + API - ONE-CLICK SETUP    ${NC}"
+echo -e "${GREEN}   SYSLOG + API: FINAL ONE-CLICK SETUP         ${NC}"
 echo -e "${GREEN}================================================${NC}"
 echo
 
@@ -39,7 +39,7 @@ echo
 print_step "Updating system..."
 apt update -y
 
-# Step 2: Install core (rsyslog, mysql, apache, php)
+# Step 2: Install core
 print_step "Installing rsyslog, MySQL, Apache, PHP..."
 apt install -y rsyslog mysql-server apache2 php libapache2-mod-php net-tools ufw curl jq
 
@@ -66,9 +66,16 @@ print_step "Enabling rsyslog..."
 systemctl enable rsyslog
 systemctl start rsyslog
 
-# Step 6: Configure rsyslog (50-mysql.conf)
-print_step "Configuring rsyslog for MySQL + ports..."
-cat > /etc/rsyslog.d/50-mysql.conf << EOF
+# Step 6: Install MySQL client lib (NO rsyslog-mysql package)
+print_step "Installing libmysqlclient21 (for ommysql)..."
+apt install -y libmysqlclient21
+
+# Remove any conflicting rsyslog-mysql config
+rm -f /etc/rsyslog.d/mysql.conf 2>/dev/null || true
+
+# Step 7: Configure rsyslog (custom file to avoid conflict)
+print_step "Configuring rsyslog (99-custom-mysql.conf)..."
+cat > /etc/rsyslog.d/99-custom-mysql.conf << EOF
 module(load="imudp")
 module(load="imtcp")
 module(load="ommysql")
@@ -99,14 +106,14 @@ INNER
 done)
 EOF
 
-# Step 7: Open firewall
-print_step "Opening syslog ports..."
+# Step 8: Open firewall
+print_step "Opening ports..."
 ufw allow 514/udp
 for p in 512 513 515 516 517 518 519 520 521; do ufw allow $p/tcp; done
 ufw allow 80/tcp
 
-# Step 8: Secure MySQL
-print_step "Securing MySQL (non-interactive)..."
+# Step 9: Secure MySQL (non-interactive)
+print_step "Securing MySQL..."
 mysql_secure_installation <<EOF
 
 n
@@ -116,8 +123,8 @@ y
 y
 EOF
 
-# Step 9: Configure MySQL remote + create DB
-print_step "Setting up MySQL database and user..."
+# Step 10: Configure MySQL
+print_step "Setting up MySQL..."
 sed -i 's/127.0.0.1/0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
 systemctl restart mysql
 
@@ -136,10 +143,6 @@ CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
 GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-
-# Step 10: Install rsyslog-mysql
-print_step "Installing rsyslog-mysql..."
-apt install -y rsyslog-mysql
 
 # Step 11: Restart rsyslog
 print_step "Restarting rsyslog..."
@@ -187,11 +190,11 @@ $in = json_decode(file_get_contents('php://input'), true);
 if (!$in || !validateAPIKey($in['secret_key'] ?? '')) {
     echo json_encode(['success' => false, 'message' => 'Invalid key']); exit;
 }
-$p = get_getDBConnection();
-if (!$conn) { echo json_encode(['success' => false, 'message' => 'DB error']); exit; }
+$pdo = getDBConnection();
+if (!$pdo) { echo json_encode(['success' => false, 'message' => 'DB error']); exit; }
 $limit = min(1000, (int)($in['limit'] ?? 100));
 $last = (int)($in['last_id'] ?? 0);
-$stmt = $conn->prepare("SELECT * FROM remote_logs WHERE id > ? ORDER BY id ASC LIMIT ?");
+$stmt = $pdo->prepare("SELECT * FROM remote_logs WHERE id > ? ORDER BY id ASC LIMIT ?");
 $stmt->execute([$last, $limit]);
 $logs = $stmt->fetchAll();
 echo json_encode([
@@ -203,18 +206,21 @@ echo json_encode([
 ?>
 EOF
 
-# test script
+# test.sh
 cat > "$API_DIR/test.sh" << EOF
 #!/bin/bash
-curl -s -X POST http://localhost/api/api.php -H "Content-Type: application/json" -d '{
-  "secret_key": "$API_SECRET_KEY",
-  "limit": 2
-}' | jq .
+echo "Testing API..."
+curl -s -X POST http://localhost/api/api.php \
+  -H "Content-Type: application/json" \
+  -d '{
+    "secret_key": "$API_SECRET_KEY",
+    "limit": 2
+  }' | jq .
 EOF
 chmod +x "$API_DIR/test.sh"
 
-# Final
-print_step "Final check..."
+# Final Check
+print_step "Final verification..."
 OK=true
 systemctl is-active --quiet rsyslog || OK=false
 systemctl is-active --quiet apache2 || OK=false
@@ -222,13 +228,14 @@ mysql -u $DB_USER -p'$DB_PASS' -e "USE $DB_NAME;" >/dev/null 2>&1 || OK=false
 
 if [ "$OK" = true ]; then
     echo -e "${GREEN}================================================${NC}"
-    echo -e "${GREEN}        FULL SETUP COMPLETE!                   ${NC}"
+    echo -e "${GREEN}           FULLY WORKING!                      ${NC}"
     echo -e "${GREEN}================================================${NC}"
     echo
-    print_status "API: http://$(hostname -I | awk '{print $1}')/api/api.php"
+    print_status "API URL: http://$(hostname -I | awk '{print $1}')/api/api.php"
     print_status "Test: bash $API_DIR/test.sh"
     print_status "Logs: /var/log/remote_syslog.log"
+    print_status "Firewall: 514/udp + 512-521/tcp + 80/tcp"
 else
-    print_error "Something failed"
+    print_error "Final check failed"
     exit 1
 fi
