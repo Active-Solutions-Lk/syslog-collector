@@ -1,9 +1,8 @@
 #!/bin/bash
 
-# FINAL: SYSLOG COLLECTOR + API (ONE-CLICK, NO CONFLICTS)
-# Uses Admin / Admin@collector1
-# No rsyslog-mysql package → avoids ommysql conflict
-# Safe, idempotent, clean
+# FINAL: SYSLOG + API (ONE-CLICK, NO ERRORS)
+# Installs rsyslog-mysql for ommysql.so, but uses OUR config
+# Blocks auto-config from package
 
 set -e
 
@@ -66,45 +65,55 @@ print_step "Enabling rsyslog..."
 systemctl enable rsyslog
 systemctl start rsyslog
 
-# Step 6: Install MySQL client lib (NO rsyslog-mysql package)
-print_step "Installing libmysqlclient21 (for ommysql)..."
-apt install -y libmysqlclient21
+# Step 6: Install rsyslog-mysql (for ommysql.so ONLY)
+print_step "Installing rsyslog-mysql (for ommysql module)..."
+apt install -y rsyslog-mysql
 
-# Remove any conflicting rsyslog-mysql config
-rm -f /etc/rsyslog.d/mysql.conf 2>/dev/null || true
+# BLOCK auto-generated config
+print_step "Blocking rsyslog-mysql auto-config..."
+echo "# BLOCKED BY install.sh" > /etc/rsyslog.d/mysql.conf
+chmod 644 /etc/rsyslog.d/mysql.conf
 
-# Step 7: Configure rsyslog (custom file to avoid conflict)
-print_step "Configuring rsyslog (99-custom-mysql.conf)..."
-cat > /etc/rsyslog.d/99-custom-mysql.conf << EOF
+# Step 7: Configure rsyslog (OUR config)
+print_step "Writing 99-custom-mysql.conf..."
+cat > /etc/rsyslog.d/99-custom-mysql.conf << 'EOF'
 module(load="imudp")
 module(load="imtcp")
 module(load="ommysql")
 
 input(type="imudp" port="514" ruleset="udp_logs")
-$(for p in 512 513 515 516 517 518 519 520 521; do echo "input(type=\"imtcp\" port=\"$p\" ruleset=\"tcp_$p\")"; done)
+input(type="imtcp" port="512" ruleset="tcp_512")
+input(type="imtcp" port="513" ruleset="tcp_513")
+input(type="imtcp" port="515" ruleset="tcp_515")
+input(type="imtcp" port="516" ruleset="tcp_516")
+input(type="imtcp" port="517" ruleset="tcp_517")
+input(type="imtcp" port="518" ruleset="tcp_518")
+input(type="imtcp" port="519" ruleset="tcp_519")
+input(type="imtcp" port="520" ruleset="tcp_520")
+input(type="imtcp" port="521" ruleset="tcp_521")
 
 template(name="SqlFormat" type="string" option.sql="on" 
          string="INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', %\$!port%)")
 
 ruleset(name="udp_logs") {
-    if \$fromhost != '$EXCLUDE_HOST' then {
-        set \$!port = "514";
+    if $fromhost != '$EXCLUDE_HOST' then {
+        set $!port = "514";
         action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat")
         action(type="omfile" file="/var/log/remote_syslog.log")
     }
 }
-$(for p in 512 513 515 516 517 518 519 520 521; do
-cat << INNER
-ruleset(name="tcp_$p") {
-    if \$fromhost != '$EXCLUDE_HOST' then {
-        set \$!port = "$p";
-        action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat")
-        action(type="omfile" file="/var/log/remote_syslog.log")
-    }
-}
-INNER
-done)
+
+ruleset(name="tcp_512") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "512"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_513") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "513"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_515") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "515"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_516") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "516"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_517") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "517"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_518") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "518"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_519") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "519"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_520") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "520"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
+ruleset(name="tcp_521") { if $fromhost != '$EXCLUDE_HOST' then { set $!port = "521"; action(type="ommysql" server="localhost" db="$DB_NAME" uid="$DB_USER" pwd="$DB_PASS" template="SqlFormat"); action(type="omfile" file="/var/log/remote_syslog.log"); } }
 EOF
+sed -i "s/\$EXCLUDE_HOST/$EXCLUDE_HOST/g; s/\$DB_NAME/$DB_NAME/g; s/\$DB_USER/$DB_USER/g; s/\$DB_PASS/$DB_PASS/g" /etc/rsyslog.d/99-custom-mysql.conf
 
 # Step 8: Open firewall
 print_step "Opening ports..."
@@ -112,7 +121,7 @@ ufw allow 514/udp
 for p in 512 513 515 516 517 518 519 520 521; do ufw allow $p/tcp; done
 ufw allow 80/tcp
 
-# Step 9: Secure MySQL (non-interactive)
+# Step 9: Secure MySQL
 print_step "Securing MySQL..."
 mysql_secure_installation <<EOF
 
@@ -150,12 +159,11 @@ rsyslogd -N1
 systemctl restart rsyslog
 
 # Step 12: Create API
-print_step "Creating API at $API_DIR..."
+print_step "Creating API..."
 rm -rf "$API_DIR" /var/www/html/syslog-collector-api-new 2>/dev/null || true
 mkdir -p "$API_DIR"
 chown www-data:www-data "$API_DIR"
 
-# connection.php
 cat > "$API_DIR/connection.php" << EOF
 <?php
 define('DB_HOST', 'localhost');
@@ -163,33 +171,20 @@ define('DB_USER', '$DB_USER');
 define('DB_PASS', '$DB_PASS');
 define('DB_NAME', '$DB_NAME');
 define('API_SECRET_KEY', '$API_SECRET_KEY');
-
 function getDBConnection() {
-    try {
-        \$pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS, [
-            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC
-        ]);
-        \$pdo->exec("SET NAMES utf8mb4");
-        return \$pdo;
-    } catch (Exception \$e) {
-        error_log("DB Error: " . \$e->getMessage());
-        return null;
-    }
+    try { \$pdo = new PDO("mysql:host=" . DB_HOST . ";dbname=" . DB_NAME . ";charset=utf8mb4", DB_USER, DB_PASS, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC]); \$pdo->exec("SET NAMES utf8mb4"); return \$pdo; }
+    catch (Exception \$e) { error_log("DB Error: " . \$e->getMessage()); return null; }
 }
 function validateAPIKey(\$k) { return hash_equals(API_SECRET_KEY, \$k); }
 ?>
 EOF
 
-# api.php
 cat > "$API_DIR/api.php" << 'EOF'
 <?php
 require_once 'connection.php';
 header('Content-Type: application/json');
 $in = json_decode(file_get_contents('php://input'), true);
-if (!$in || !validateAPIKey($in['secret_key'] ?? '')) {
-    echo json_encode(['success' => false, 'message' => 'Invalid key']); exit;
-}
+if (!$in || !validateAPIKey($in['secret_key'] ?? '')) { echo json_encode(['success' => false, 'message' => 'Invalid key']); exit; }
 $pdo = getDBConnection();
 if (!$pdo) { echo json_encode(['success' => false, 'message' => 'DB error']); exit; }
 $limit = min(1000, (int)($in['limit'] ?? 100));
@@ -197,25 +192,17 @@ $last = (int)($in['last_id'] ?? 0);
 $stmt = $pdo->prepare("SELECT * FROM remote_logs WHERE id > ? ORDER BY id ASC LIMIT ?");
 $stmt->execute([$last, $limit]);
 $logs = $stmt->fetchAll();
-echo json_encode([
-    'success' => true,
-    'data' => $logs,
-    'count' => count($logs),
-    'next_id' => $logs ? end($logs)['id'] : $last
-]);
+echo json_encode(['success' => true, 'data' => $logs, 'count' => count($logs), 'next_id' => $logs ? end($logs)['id'] : $last]);
 ?>
 EOF
 
-# test.sh
 cat > "$API_DIR/test.sh" << EOF
 #!/bin/bash
 echo "Testing API..."
-curl -s -X POST http://localhost/api/api.php \
-  -H "Content-Type: application/json" \
-  -d '{
-    "secret_key": "$API_SECRET_KEY",
-    "limit": 2
-  }' | jq .
+curl -s -X POST http://localhost/api/api.php -H "Content-Type: application/json" -d '{
+  "secret_key": "$API_SECRET_KEY",
+  "limit": 2
+}' | jq .
 EOF
 chmod +x "$API_DIR/test.sh"
 
@@ -228,13 +215,11 @@ mysql -u $DB_USER -p'$DB_PASS' -e "USE $DB_NAME;" >/dev/null 2>&1 || OK=false
 
 if [ "$OK" = true ]; then
     echo -e "${GREEN}================================================${NC}"
-    echo -e "${GREEN}           FULLY WORKING!                      ${NC}"
+    echo -e "${GREEN}           100% WORKING!                       ${NC}"
     echo -e "${GREEN}================================================${NC}"
     echo
-    print_status "API URL: http://$(hostname -I | awk '{print $1}')/api/api.php"
+    print_status "API: http://$(hostname -I | awk '{print $1}')/api/api.php"
     print_status "Test: bash $API_DIR/test.sh"
-    print_status "Logs: /var/log/remote_syslog.log"
-    print_status "Firewall: 514/udp + 512-521/tcp + 80/tcp"
 else
     print_error "Final check failed"
     exit 1
