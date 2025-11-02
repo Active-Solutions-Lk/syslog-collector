@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # FINAL: SYSLOG + API (100% WORKING)
-# Using legacy rsyslog syntax for maximum compatibility
+# Using legacy rsyslog syntax with proper port tracking
 # Compatible with rsyslog 8.x
 
 set -e
@@ -73,37 +73,119 @@ apt install -y rsyslog-mysql
 print_step "Blocking rsyslog-mysql auto-config..."
 echo "# BLOCKED BY install.sh" > /etc/rsyslog.d/mysql.conf
 
-# Step 7: Write rsyslog configuration using legacy format
-print_step "Writing 99-custom-mysql.conf (legacy format for compatibility)..."
+# Step 7: Write rsyslog configuration using legacy format with port tracking
+print_step "Writing 99-custom-mysql.conf (with proper port tracking)..."
 cat > /etc/rsyslog.d/99-custom-mysql.conf << 'EOF'
 # Load required modules
 $ModLoad imudp
 $ModLoad imtcp
 $ModLoad ommysql
 
-# Configure listeners
-$InputUDPServerRun 514
+# Configure listeners with unique names
+$InputUDPServerBindRuleset udp_514
+$UDPServerRun 514
+
+$InputTCPServerBindRuleset tcp_512
 $InputTCPServerRun 512
+
+$InputTCPServerBindRuleset tcp_513
 $InputTCPServerRun 513
+
+$InputTCPServerBindRuleset tcp_515
 $InputTCPServerRun 515
+
+$InputTCPServerBindRuleset tcp_516
 $InputTCPServerRun 516
+
+$InputTCPServerBindRuleset tcp_517
 $InputTCPServerRun 517
+
+$InputTCPServerBindRuleset tcp_518
 $InputTCPServerRun 518
+
+$InputTCPServerBindRuleset tcp_519
 $InputTCPServerRun 519
+
+$InputTCPServerBindRuleset tcp_520
 $InputTCPServerRun 520
+
+$InputTCPServerBindRuleset tcp_521
 $InputTCPServerRun 521
 
-# SQL template for database insertion
-$template SqlFormat,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '%inputname%')",SQL
+# SQL templates for each port
+$template SqlFormat514,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '514')",SQL
+$template SqlFormat512,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '512')",SQL
+$template SqlFormat513,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '513')",SQL
+$template SqlFormat515,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '515')",SQL
+$template SqlFormat516,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '516')",SQL
+$template SqlFormat517,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '517')",SQL
+$template SqlFormat518,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '518')",SQL
+$template SqlFormat519,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '519')",SQL
+$template SqlFormat520,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '520')",SQL
+$template SqlFormat521,"INSERT INTO remote_logs (received_at, hostname, facility, message, port) VALUES ('%timegenerated:::date-mysql%', '%hostname%', '%syslogfacility-text%', '%msg%', '521')",SQL
 
-# Filter and send to MySQL (exclude localhost)
-:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat
-
-# Also log to file
+# Ruleset for UDP 514
+$RuleSet udp_514
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat514
 :fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
-
-# Stop processing for remote logs
 & stop
+
+# Ruleset for TCP 512
+$RuleSet tcp_512
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat512
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 513
+$RuleSet tcp_513
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat513
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 515
+$RuleSet tcp_515
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat515
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 516
+$RuleSet tcp_516
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat516
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 517
+$RuleSet tcp_517
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat517
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 518
+$RuleSet tcp_518
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat518
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 519
+$RuleSet tcp_519
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat519
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 520
+$RuleSet tcp_520
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat520
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Ruleset for TCP 521
+$RuleSet tcp_521
+:fromhost, !isequal, "PLACEHOLDER_HOST" :ommysql:localhost,PLACEHOLDER_DB,PLACEHOLDER_USER,PLACEHOLDER_PASS;SqlFormat521
+:fromhost, !isequal, "PLACEHOLDER_HOST" /var/log/remote_syslog.log
+& stop
+
+# Switch back to default ruleset
+$RuleSet RSYSLOG_DefaultRuleset
 EOF
 
 # Inject configuration variables
@@ -148,10 +230,11 @@ CREATE TABLE IF NOT EXISTS remote_logs (
     hostname VARCHAR(255),
     facility VARCHAR(50),
     message TEXT,
-    port VARCHAR(50),
+    port VARCHAR(10),
     INDEX idx_id (id),
     INDEX idx_received_at (received_at),
-    INDEX idx_hostname (hostname)
+    INDEX idx_hostname (hostname),
+    INDEX idx_port (port)
 );
 
 CREATE USER IF NOT EXISTS '$DB_USER'@'localhost' IDENTIFIED BY '$DB_PASS';
@@ -278,6 +361,7 @@ $limit = min(1000, max(1, (int)($input['limit'] ?? 100)));
 $last_id = max(0, (int)($input['last_id'] ?? 0));
 $hostname = $input['hostname'] ?? null;
 $facility = $input['facility'] ?? null;
+$port = $input['port'] ?? null;
 
 // Build query
 $query = "SELECT * FROM remote_logs WHERE id > ?";
@@ -291,6 +375,11 @@ if ($hostname) {
 if ($facility) {
     $query .= " AND facility = ?";
     $params[] = $facility;
+}
+
+if ($port) {
+    $query .= " AND port = ?";
+    $params[] = $port;
 }
 
 $query .= " ORDER BY id ASC LIMIT ?";
@@ -336,6 +425,18 @@ curl -s -X POST http://localhost/api/api.php \\
   }' | jq .
 echo ""
 echo "=========================================="
+echo ""
+echo "Fetching logs from port 514..."
+echo ""
+curl -s -X POST http://localhost/api/api.php \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "secret_key": "$API_SECRET_KEY",
+    "limit": 5,
+    "port": "514"
+  }' | jq .
+echo ""
+echo "=========================================="
 EOF
 chmod +x "$API_DIR/test.sh"
 
@@ -356,7 +457,8 @@ Retrieve syslog entries from the database.
   "limit": 100,
   "last_id": 0,
   "hostname": "optional-hostname-filter",
-  "facility": "optional-facility-filter"
+  "facility": "optional-facility-filter",
+  "port": "optional-port-filter"
 }
 ```
 
@@ -371,6 +473,11 @@ Retrieve syslog entries from the database.
 }
 ```
 
+## Available Ports
+
+- UDP: 514
+- TCP: 512, 513, 515, 516, 517, 518, 519, 520, 521
+
 ## Testing
 
 Run the test script:
@@ -381,9 +488,15 @@ bash /var/www/html/api/test.sh
 ## Manual Test
 
 ```bash
+# Get all logs
 curl -X POST http://localhost/api/api.php \
   -H "Content-Type: application/json" \
   -d '{"secret_key": "your-key", "limit": 10}'
+
+# Get logs from specific port
+curl -X POST http://localhost/api/api.php \
+  -H "Content-Type: application/json" \
+  -d '{"secret_key": "your-key", "limit": 10, "port": "514"}'
 ```
 EOF
 
@@ -440,6 +553,8 @@ if [ "$OK" = true ]; then
     print_status "Test API: bash $API_DIR/test.sh"
     print_status "View logs: tail -f /var/log/remote_syslog.log"
     print_status "Check MySQL: mysql -u $DB_USER -p'$DB_PASS' -e 'SELECT * FROM $DB_NAME.remote_logs LIMIT 5;'"
+    echo
+    print_status "Port tracking is now enabled - each log will show the correct port number!"
     echo
     echo -e "${GREEN}================================================${NC}"
 else
