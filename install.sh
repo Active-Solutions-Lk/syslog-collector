@@ -38,9 +38,27 @@ echo
 print_step "Updating system..."
 apt update -y
 
-# Step 2: Install core packages
-print_step "Installing rsyslog, MySQL, Apache, PHP..."
-apt install -y rsyslog mysql-server apache2 php libapache2-mod-php net-tools ufw curl jq
+# Step 2: Detect OS and install appropriate database
+print_step "Detecting operating system..."
+if [ -f /etc/debian_version ]; then
+    DEBIAN_VERSION=$(cat /etc/debian_version | cut -d. -f1)
+    if [ "$DEBIAN_VERSION" -ge "12" ]; then
+        print_status "Debian $DEBIAN_VERSION detected - using MariaDB"
+        DB_PACKAGE="mariadb-server"
+    else
+        print_status "Debian $DEBIAN_VERSION detected - using MySQL"
+        DB_PACKAGE="mysql-server"
+    fi
+elif [ -f /etc/lsb-release ]; then
+    print_status "Ubuntu detected - using MySQL"
+    DB_PACKAGE="mysql-server"
+else
+    print_warning "Unknown OS - defaulting to MySQL"
+    DB_PACKAGE="mysql-server"
+fi
+
+print_step "Installing rsyslog, $DB_PACKAGE, Apache, PHP..."
+apt install -y rsyslog $DB_PACKAGE apache2 php libapache2-mod-php net-tools ufw curl jq
 
 # Detect PHP version
 PHP_VER=$(php -r "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;" 2>/dev/null || echo "8.1")
@@ -203,9 +221,10 @@ for p in 512 513 515 516 517 518 519 520 521; do
 done
 ufw allow 80/tcp
 
-# Step 9: Secure MySQL installation
-print_step "Securing MySQL..."
-mysql_secure_installation <<EOF
+# Step 9: Secure MySQL/MariaDB installation
+print_step "Securing $DB_PACKAGE..."
+if command -v mysql_secure_installation >/dev/null 2>&1; then
+    mysql_secure_installation <<EOF
 
 n
 y
@@ -213,11 +232,34 @@ y
 y
 y
 EOF
+else
+    print_warning "mysql_secure_installation not found, skipping..."
+fi
 
-# Step 10: Configure MySQL
-print_step "Setting up MySQL database and user..."
-sed -i 's/127.0.0.1/0.0.0.0/' /etc/mysql/mysql.conf.d/mysqld.cnf
-systemctl restart mysql
+# Step 10: Configure MySQL/MariaDB
+print_step "Setting up database and user..."
+
+# Find the MySQL/MariaDB config file
+if [ -f /etc/mysql/mariadb.conf.d/50-server.cnf ]; then
+    MYSQL_CONF="/etc/mysql/mariadb.conf.d/50-server.cnf"
+elif [ -f /etc/mysql/mysql.conf.d/mysqld.cnf ]; then
+    MYSQL_CONF="/etc/mysql/mysql.conf.d/mysqld.cnf"
+else
+    print_warning "MySQL config file not found, skipping bind-address change"
+    MYSQL_CONF=""
+fi
+
+if [ -n "$MYSQL_CONF" ]; then
+    print_status "Configuring $MYSQL_CONF"
+    sed -i 's/127.0.0.1/0.0.0.0/g' "$MYSQL_CONF"
+fi
+
+# Restart database service
+if systemctl list-units --type=service | grep -q mariadb; then
+    systemctl restart mariadb
+else
+    systemctl restart mysql
+fi
 
 # Create database, table, and user
 mysql -u root <<EOF
