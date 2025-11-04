@@ -67,7 +67,28 @@ print_status "PHP Version: $PHP_VER"
 # Step 3: Install PHP MySQL extension (PDO)
 print_step "Installing php${PHP_VER}-mysql (PDO)..."
 apt install -y php${PHP_VER}-mysql
-systemctl restart apache2
+
+# Check if port 80 is in use before starting Apache
+print_step "Checking port 80 availability..."
+if netstat -tuln | grep -q ":80 "; then
+    print_warning "Port 80 is already in use. Checking what's using it..."
+    PROCESS=$(lsof -i :80 2>/dev/null | grep LISTEN | awk '{print $1}' | head -1)
+    if [ -n "$PROCESS" ]; then
+        print_status "Process using port 80: $PROCESS"
+        if [ "$PROCESS" = "apache2" ] || [ "$PROCESS" = "httpd" ]; then
+            print_status "Apache is already running, restarting it..."
+            systemctl restart apache2
+        else
+            print_error "Port 80 is used by $PROCESS. Please stop it first:"
+            print_error "  sudo systemctl stop $PROCESS"
+            print_error "  or: sudo pkill -9 $PROCESS"
+            lsof -i :80 2>/dev/null | grep LISTEN
+            exit 1
+        fi
+    fi
+else
+    systemctl restart apache2
+fi
 
 # Step 4: Verify PDO installation
 print_step "Verifying PDO..."
